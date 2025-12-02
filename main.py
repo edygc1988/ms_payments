@@ -5,4 +5,4 @@ app = FastAPI()
 
 @app.get("/")
 async def read_root():
-    return {"message": "hola mundo"}
+    return {"message": "cu-ms-payments is up and running"}
