@@ -34,8 +34,14 @@ jobs:
   deploy-openshift:
     runs-on: ubuntu-latest
     needs: build-and-push
-    if: ${{ secrets.OPENSHIFT_API_URL && secrets.OPENSHIFT_TOKEN && secrets.OPENSHIFT_PROJECT }}
     steps:
+      - name: Check OpenShift secrets
+        run: |
+          if [ -z "${{ secrets.OPENSHIFT_API_URL }}" ] || [ -z "${{ secrets.OPENSHIFT_TOKEN }}" ] || [ -z "${{ secrets.OPENSHIFT_PROJECT }}" ]; then
+            echo "Required OpenShift secrets are not set. Skipping deploy-openshift job.";
+            exit 78;
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
