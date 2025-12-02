@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: DEPLOYMENT_NAME_PLACEHOLDER
+  labels:
+    app: ms-payments
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-payments
+  template:
+    metadata:
+      labels:
+        app: ms-payments
+    spec:
+      containers:
+        - name: ms-payments
+          image: IMAGE_PLACEHOLDER
+          ports:
+            - containerPort: 8080
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ms-payments-service
+spec:
+  selector:
+    app: ms-payments
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: ClusterIP
