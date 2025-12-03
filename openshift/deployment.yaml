@@ -54,8 +54,6 @@ spec:
             timeoutSeconds: 5
             initialDelaySeconds: 5
           envFrom:
-            - configMapRef:
-                name: ms-payments-config
             - secretRef:
                 name: ms-payments-secret
 ---
@@ -72,23 +70,12 @@ spec:
       targetPort: 8080
   type: ClusterIP
 
----
-# ConfigMap adapted from k8s.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: ms-payments-config
-  namespace: DEPLOYMENT_NAMESPACE_PLACEHOLDER
-data:
-  LOG_LEVEL: "INFO"
-
----
 # Secret adapted from k8s.yaml (stringData for easier templating — replace with real secrets)
 apiVersion: v1
 kind: Secret
 metadata:
   name: ms-payments-secret
-  namespace: DEPLOYMENT_NAMESPACE_PLACEHOLDER
+  namespace: edygc1988-dev
 type: Opaque
 stringData:
   DB_PASSWORD: "<REPLACE_WITH_DB_PASSWORD>"
@@ -100,12 +87,12 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: ms-payments
-  namespace: DEPLOYMENT_NAMESPACE_PLACEHOLDER
+  namespace: edygc1988-dev
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: DEPLOYMENT_NAME_PLACEHOLDER
+    name: edygc1988-dev
   minReplicas: 1
   maxReplicas: 3
   metrics:
