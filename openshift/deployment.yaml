@@ -71,3 +71,47 @@ spec:
       port: 80
       targetPort: 8080
   type: ClusterIP
+
+---
+# ConfigMap adapted from k8s.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ms-payments-config
+  namespace: DEPLOYMENT_NAMESPACE_PLACEHOLDER
+data:
+  LOG_LEVEL: "INFO"
+
+---
+# Secret adapted from k8s.yaml (stringData for easier templating — replace with real secrets)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ms-payments-secret
+  namespace: DEPLOYMENT_NAMESPACE_PLACEHOLDER
+type: Opaque
+stringData:
+  DB_PASSWORD: "<REPLACE_WITH_DB_PASSWORD>"
+  API_KEY: "<REPLACE_WITH_API_KEY>"
+
+---
+# HorizontalPodAutoscaler adapted from k8s.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ms-payments
+  namespace: DEPLOYMENT_NAMESPACE_PLACEHOLDER
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: DEPLOYMENT_NAME_PLACEHOLDER
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
