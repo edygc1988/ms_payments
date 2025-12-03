@@ -64,9 +64,30 @@ jobs:
         env:
           IMAGE: edygc1988/ms_payments:${{ github.run_number }}
           DEPLOYMENT_NAME: ${{ secrets.OPENSHIFT_DEPLOYMENT_NAME }}
+          NAMESPACE: ${{ secrets.OPENSHIFT_PROJECT }}
+          PORT: ${{ secrets.APP_PORT }}
         run: |
           if [ -z "$DEPLOYMENT_NAME" ]; then DEPLOYMENT_NAME="ms-payments"; fi
+          if [ -z "$NAMESPACE" ]; then echo "OPENSHIFT_PROJECT not set"; exit 1; fi
+          if [ -z "$PORT" ]; then PORT=8000; fi
           if [ ! -f openshift/deployment.yaml ]; then echo "openshift/deployment.yaml not found"; exit 1; fi
-          sed "s|IMAGE_PLACEHOLDER|${IMAGE}|g; s|DEPLOYMENT_NAME_PLACEHOLDER|${DEPLOYMENT_NAME}|g" openshift/deployment.yaml > /tmp/deployment-applied.yaml
-          oc apply -f /tmp/deployment-applied.yaml
-          oc rollout status deployment/$DEPLOYMENT_NAME --timeout=120s
+
+          # Create/update secret from GitHub Secrets if provided
+          if [ -n "${{ secrets.DB_PASSWORD }}" ] || [ -n "${{ secrets.API_KEY }}" ]; then
+            oc -n "$NAMESPACE" create secret generic ms-payments-secret \
+              --from-literal=DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+              --from-literal=API_KEY="${{ secrets.API_KEY }}" \
+              --dry-run=client -o yaml | oc apply -f -
+            echo "Secret 'ms-payments-secret' created/updated in namespace $NAMESPACE"
+          else
+            echo "DB_PASSWORD/API_KEY not set in GitHub Secrets; skipping secret creation"
+          fi
+
+          # Substitute placeholders and apply
+          sed -e "s|IMAGE_PLACEHOLDER|${IMAGE}|g" \
+              -e "s|DEPLOYMENT_NAME_PLACEHOLDER|${DEPLOYMENT_NAME}|g" \
+              -e "s|DEPLOYMENT_NAMESPACE_PLACEHOLDER|${NAMESPACE}|g" \
+              -e "s|PORT_PLACEHOLDER|${PORT}|g" openshift/deployment.yaml > /tmp/deployment-applied.yaml
+
+          oc apply -f /tmp/deployment-applied.yaml -n "$NAMESPACE"
+          oc rollout status deployment/$DEPLOYMENT_NAME -n "$NAMESPACE" --timeout=180s

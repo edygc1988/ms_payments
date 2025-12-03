@@ -18,7 +18,7 @@ spec:
         - name: ms-payments
           image: IMAGE_PLACEHOLDER
           ports:
-            - containerPort: 8080
+            - containerPort: PORT_PLACEHOLDER
           resources:
             requests:
               cpu: "250m"
@@ -29,7 +29,7 @@ spec:
           startupProbe:
             httpGet:
               path: /startup
-              port: 8080
+              port: PORT_PLACEHOLDER
             failureThreshold: 3
             periodSeconds: 10
             successThreshold: 1
@@ -38,7 +38,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /liveness
-              port: 8080
+              port: PORT_PLACEHOLDER
             failureThreshold: 3
             periodSeconds: 10
             successThreshold: 1
@@ -47,7 +47,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /readiness
-              port: 8080
+              port: PORT_PLACEHOLDER
             failureThreshold: 3
             periodSeconds: 10
             successThreshold: 1
@@ -67,7 +67,7 @@ spec:
   ports:
     - protocol: TCP
       port: 80
-      targetPort: 8080
+      targetPort: PORT_PLACEHOLDER
   type: ClusterIP
 
 # Secret adapted from k8s.yaml (stringData for easier templating — replace with real secrets)
