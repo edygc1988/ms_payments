@@ -69,17 +69,7 @@ spec:
       port: 80
       targetPort: PORT_PLACEHOLDER
   type: ClusterIP
-
-# Secret adapted from k8s.yaml (stringData for easier templating — replace with real secrets)
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ms-payments-secret
-  namespace: edygc1988-dev
-type: Opaque
-stringData:
-  DB_PASSWORD: "<REPLACE_WITH_DB_PASSWORD>"
-  API_KEY: "<REPLACE_WITH_API_KEY>"
+  type: ClusterIP
 
 ---
 # HorizontalPodAutoscaler adapted from k8s.yaml
