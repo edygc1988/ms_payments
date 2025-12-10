@@ -39,22 +39,44 @@ jobs:
             --debug > /tmp/manifest.yaml
           echo "Generated manifest contains $(wc -l < /tmp/manifest.yaml) lines"
 
-      - name: Validate manifests YAML syntax
+        - name: Validate manifests YAML syntax
         run: |
           echo "Validating YAML syntax..."
           helm template ms-payments ${{ env.HELM_CHART_PATH }} > /tmp/manifest.yaml
-          python3 -c "import yaml; yaml.safe_load(open('/tmp/manifest.yaml'))" && echo "✓ YAML syntax is valid" || exit 1
+          # Ensure PyYAML is available
+          python3 -m pip install --user pyyaml >/dev/null
+          python3 - <<'PY'
+    import sys, yaml
+    path = '/tmp/manifest.yaml'
+    try:
+      docs = list(yaml.safe_load_all(open(path)))
+    except Exception as e:
+      print('ERROR: YAML parse error in generated manifest:', file=sys.stderr)
+      print(e, file=sys.stderr)
+      print('\n--- manifest excerpt ---', file=sys.stderr)
+      with open(path) as f:
+        for i, line in enumerate(f):
+          if i < 200:
+            sys.stderr.write(line)
+          else:
+            break
+      sys.exit(1)
+    if not docs:
+      print('ERROR: No YAML documents generated', file=sys.stderr)
+      sys.exit(1)
+    print(f"✓ YAML parsed OK: {len(docs)} documents")
+    PY
 
       - name: Check for common issues
         run: |
           echo "Checking for common Helm issues..."
           MANIFEST=$(helm template ms-payments ${{ env.HELM_CHART_PATH }})
-          
+
           # Check for required fields
           echo "$MANIFEST" | grep -q "kind:" && echo "✓ Kind field present" || (echo "Error: No kind field found" && exit 1)
           echo "$MANIFEST" | grep -q "metadata:" && echo "✓ Metadata present" || (echo "Error: No metadata found" && exit 1)
           echo "$MANIFEST" | grep -q "name:" && echo "✓ Name field present" || echo "⚠ No name field (might be OK)"
-          
+
           # Check for deprecated APIs
           if echo "$MANIFEST" | grep -q "apiVersion: extensions/v1beta1"; then
             echo "Error: Found deprecated extensions/v1beta1 API version"
@@ -62,7 +84,7 @@ jobs:
           else
             echo "✓ No deprecated extensions/v1beta1 APIs"
           fi
-          
+
           # Check image configuration
           if echo "$MANIFEST" | grep -q "image:"; then
             echo "✓ Container image configured"

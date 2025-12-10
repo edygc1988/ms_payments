@@ -7,14 +7,17 @@ Se ha integrado exitosamente Helm en el CI/CD de GitHub con la siguiente estruct
 ### 📁 Archivos Creados/Modificados
 
 #### 1. **GitHub Actions Workflows** (`.github/workflows/`)
+
 - `helm-cicd.yml` - Pipeline completo de CI/CD
 - `helm-validation.yml` - Validación en Pull Requests
 
 #### 2. **Scripts** (`scripts/`)
+
 - `helm-deploy.sh` - Script para deployment local
 - `helm-inject-vars.sh` - Script para inyectar variables
 
 #### 3. **Helm Values** (`helm-recype/`)
+
 - `values.yaml` - Valores por defecto
 - `values-dev.yaml` - Valores para desarrollo
 - `values-prod.yaml` - Valores para producción
@@ -23,6 +26,7 @@ Se ha integrado exitosamente Helm en el CI/CD de GitHub con la siguiente estruct
   - API_PASSWD: `APi_PASSWD`
 
 #### 4. **Configuración**
+
 - `.github/helm-variables.env` - Variables globales
 - `.github/SETUP_GITHUB_ACTIONS.md` - Guía de configuración
 - `.github/HELM_EXAMPLES.md` - Ejemplos de uso
@@ -44,12 +48,14 @@ KUBECONFIG       = contenido_de_~/.kube/config
 ## 🚀 Flujo de CI/CD
 
 ### En `develop` (Solo build de imagen)
+
 1. ✅ Valida Helm chart
 2. ✅ Construye imagen Docker
 3. ✅ Pushea a Docker Hub
 4. ❌ NO despliega
 
 ### En `main` (Full deployment)
+
 1. ✅ Valida Helm chart
 2. ✅ Construye imagen Docker
 3. ✅ Pushea a Docker Hub
@@ -58,6 +64,7 @@ KUBECONFIG       = contenido_de_~/.kube/config
 6. ✅ Verifica el estado del deployment
 
 ### En Pull Requests
+
 1. ✅ Valida Helm chart
 2. ✅ Verifica YAML syntax
 3. ✅ Busca APIs deprecadas
@@ -70,6 +77,7 @@ KUBECONFIG       = contenido_de_~/.kube/config
 ### Ubicación: `.github/helm-variables.env`
 
 **Base de Datos:**
+
 ```env
 DB_PASSWD=curso2025
 DB_USER=postgres
@@ -78,12 +86,14 @@ DB_PORT=5432
 ```
 
 **API:**
+
 ```env
 API_PASSWD=APi_PASSWD
 API_PORT=8000
 ```
 
 **Aplicación:**
+
 ```env
 APP_ENV=production
 APP_NAME=ms_payments
@@ -91,6 +101,7 @@ APP_REPLICA_COUNT=1
 ```
 
 **Imagen Docker:**
+
 ```env
 IMAGE_REPOSITORY=edygc1988/ms_payments
 IMAGE_TAG=latest
@@ -98,6 +109,7 @@ IMAGE_PULL_POLICY=IfNotPresent
 ```
 
 **Recursos:**
+
 ```env
 RESOURCES_REQUESTS_CPU=250m
 RESOURCES_REQUESTS_MEMORY=250Mi
@@ -106,6 +118,7 @@ RESOURCES_LIMITS_MEMORY=250Mi
 ```
 
 **Health Checks:**
+
 ```env
 STARTUP_PATH=/startup
 LIVENESS_PATH=/liveness
@@ -113,6 +126,7 @@ READINESS_PATH=/readiness
 ```
 
 **HPA (Auto-scaling):**
+
 ```env
 HPA_ENABLED=true
 HPA_MIN_REPLICAS=1
@@ -190,6 +204,7 @@ La validación ahora incluye:
 ## 🔄 Flujo Completo (Ejemplo)
 
 ### 1. Desarrollo Local
+
 ```bash
 # Hacer cambios en Helm chart
 git checkout -b feature/update-helm
@@ -208,17 +223,20 @@ git push origin feature/update-helm
 ```
 
 ### 2. Pull Request
+
 - GitHub Actions valida automáticamente
 - Comenta resultado en el PR
 - ✓ Si todo OK, autorizar merge
 
 ### 3. Merge a main
+
 - Construye imagen Docker
 - Pushea a Docker Hub
 - Escanea vulnerabilidades
 - **Despliega automáticamente** a Kubernetes
 
 ### 4. Verificar Deployment
+
 ```bash
 # Ver estado
 kubectl get deployment ms-payments
@@ -231,6 +249,7 @@ kubectl logs -f deployment/ms-payments
 ## ⚙️ Configuración de Ambientes
 
 ### Desarrollo
+
 ```bash
 helm install ms-payments ./helm-recype \
   -f ./helm-recype/values-dev.yaml \
@@ -238,6 +257,7 @@ helm install ms-payments ./helm-recype \
 ```
 
 ### Producción
+
 ```bash
 helm install ms-payments ./helm-recype \
   -f ./helm-recype/values.yaml \
@@ -251,10 +271,13 @@ helm install ms-payments ./helm-recype \
 ## 🐛 Troubleshooting
 
 ### Error: DOCKER_USERNAME not found
+
 **Solución:** Configurar secrets en Settings → Secrets and variables → Actions
 
 ### Error: KUBECONFIG not found
-**Solución:** 
+
+**Solución:**
+
 ```bash
 # Obtener kubeconfig
 cat ~/.kube/config
@@ -263,6 +286,7 @@ cat ~/.kube/config
 ```
 
 ### Deployment stuck in pending
+
 ```bash
 # Ver qué está pasando
 kubectl describe pod <pod-name>
@@ -270,6 +294,7 @@ kubectl get events -n default
 ```
 
 ### Ver logs del deployment
+
 ```bash
 kubectl logs -f deployment/ms-payments
 kubectl logs -f deployment/ms-payments --all-containers
