@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "postgresql.fullname" . }}
+  labels:
+    app: {{ include "postgresql.fullname" . }}
+spec:
+  serviceName: {{ include "postgresql.fullname" . }}-headless
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "postgresql.fullname" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "postgresql.fullname" . }}
+    spec:
+      containers:
+        - name: postgres
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.port }}
+              name: postgres
+          env:
+            - name: POSTGRES_USER
+              value: {{ quote .Values.postgres.user }}
+            - name: POSTGRES_DB
+              value: {{ quote .Values.postgres.database }}
+{{- if not .Values.secret.create }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secret.name }}
+                  key: DB_PASSWORD
+{{- else }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secret.name }}
+                  key: DB_PASSWORD
+{{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+{{- if .Values.initdbScripts.enabled }}
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+{{- end }}
+      {{- if .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 8 }}
+      {{- end }}
+      {{- if .Values.tolerations }}
+      tolerations:
+{{ toYaml .Values.tolerations | indent 8 }}
+      {{- end }}
+      {{- if .Values.affinity }}
+      affinity:
+{{ toYaml .Values.affinity | indent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size }}
+        {{- if .Values.persistence.storageClass }}
+        storageClassName: {{ .Values.persistence.storageClass }}
+        {{- end }}

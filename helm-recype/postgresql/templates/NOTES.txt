@@ -1,0 +1,13 @@
+Thank you for installing the PostgreSQL chart.
+
+To connect to your database:
+
+  1. Get the password (if you created the secret via Helm):
+     kubectl get secret {{ .Release.Name }}-postgresql -o jsonpath="{.data.DB_PASSWORD}" | base64 --decode
+
+  2. Port-forward (local):
+     kubectl port-forward svc/{{ include "postgresql.fullname" . }} 5432:5432
+
+  3. Connect with psql:
+     PGPASSWORD=$(kubectl get secret {{ .Release.Name }}-postgresql -o jsonpath="{.data.DB_PASSWORD}" | base64 --decode) \
+     psql -h 127.0.0.1 -p 5432 -U {{ .Values.postgres.user }} {{ .Values.postgres.database }}

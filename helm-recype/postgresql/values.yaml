@@ -1,0 +1,35 @@
+replicaCount: 1
+
+image:
+  repository: postgres
+  tag: "15"
+  pullPolicy: IfNotPresent
+
+postgres:
+  user: postgres
+  password: ""
+  database: postgres
+
+service:
+  port: 5432
+  type: ClusterIP
+
+persistence:
+  enabled: true
+  size: 8Gi
+  storageClass: ""
+
+resources: {}
+
+secret:
+  create: false
+  name: postgresql-secret
+  data: {}
+
+initdbScripts:
+  enabled: false
+  configMapName: postgresql-initdb
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -1,0 +1,11 @@
+{{- if .Values.initdbScripts.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.initdbScripts.configMapName }}
+data:
+{{- range $k, $v := .Files.Glob "initdb/*" }}
+  {{ base $k }}: |-
+{{ $v | indent 4 }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,61 @@
+replicaCount: 1
+
+image:
+  repository: edygc1988/ms_payments
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 80
+
+container:
+  port: 8000
+
+resources:
+  requests:
+    cpu: "250m"
+    memory: "250Mi"
+  limits:
+    cpu: "1"
+    memory: "250Mi"
+
+probes:
+  startup:
+    path: /startup
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+  liveness:
+    path: /liveness
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+  readiness:
+    path: /readiness
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+
+hpa:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+secret:
+  create: false
+  name: ms-payments-secret
+  data: {}
+
+deploymentName: ms-payments
+namespace: ""
