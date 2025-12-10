@@ -179,36 +179,73 @@ jobs:
           # Create .kube directory
           mkdir -p $HOME/.kube
 
-          # Decode and save kubeconfig
-          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          # Debug: Check if secret exists
+          if [ -z "${{ secrets.KUBECONFIG }}" ]; then
+            echo "ERROR: KUBECONFIG secret is not set or is empty"
+            echo "Please add your kubeconfig to GitHub Secrets"
+            echo "Go to: Settings > Secrets and variables > Actions > New repository secret"
+            exit 1
+          fi
+
+          echo "Secret KUBECONFIG is set (length: ${#KUBECONFIG_SECRET})"
+
+          # Try to decode kubeconfig
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config 2>/tmp/decode_error.log
+
+          # Check if decode was successful
+          if [ $? -ne 0 ]; then
+            echo "ERROR: Failed to decode base64"
+            echo "Error log:"
+            cat /tmp/decode_error.log
+            echo ""
+            echo "Your KUBECONFIG secret might not be properly base64 encoded."
+            echo "To fix: cat ~/.kube/config | base64 -w 0"
+            exit 1
+          fi
 
           # Set permissions
           chmod 600 $HOME/.kube/config
 
           # Verify file exists and has content
           if [ ! -s $HOME/.kube/config ]; then
-            echo "ERROR: Kubeconfig file is empty or doesn't exist"
+            echo "ERROR: Kubeconfig file is empty after decoding"
+            echo "Please verify your KUBECONFIG secret contains valid base64 data"
             exit 1
           fi
 
+          FILE_SIZE=$(stat -c%s $HOME/.kube/config 2>/dev/null || stat -f%z $HOME/.kube/config 2>/dev/null)
           echo "✓ Kubeconfig file created successfully"
-          echo "File size: $(stat -f%z $HOME/.kube/config 2>/dev/null || stat -c%s $HOME/.kube/config) bytes"
+          echo "File size: $FILE_SIZE bytes"
+
+          # Verify it's valid YAML
+          if ! grep -q "apiVersion:" $HOME/.kube/config; then
+            echo "ERROR: Kubeconfig doesn't appear to be valid"
+            echo "First 10 lines of decoded content:"
+            head -n 10 $HOME/.kube/config
+            exit 1
+          fi
 
           # Show cluster info (without sensitive data)
-          echo "Cluster server:"
-          grep "server:" $HOME/.kube/config | head -1
+          echo "Cluster configuration found:"
+          grep "server:" $HOME/.kube/config | head -1 || echo "WARNING: No server URL found"
 
       - name: Verify Kubernetes connection
-        env:
-          KUBECONFIG: ${{ github.workspace }}/.kube/config
         run: |
-          # Copy to workspace for consistency
-          mkdir -p ${{ github.workspace }}/.kube
-          cp $HOME/.kube/config ${{ github.workspace }}/.kube/config
+          export KUBECONFIG=$HOME/.kube/config
 
           echo "Testing connection to Kubernetes cluster..."
           kubectl version --client
-          kubectl cluster-info
+
+          echo "Attempting to connect to cluster..."
+          if ! kubectl cluster-info; then
+            echo "ERROR: Cannot connect to Kubernetes cluster"
+            echo "Please verify:"
+            echo "1. Your cluster is accessible"
+            echo "2. Your kubeconfig credentials are valid"
+            echo "3. Your cluster URL is correct"
+            exit 1
+          fi
+
           kubectl get nodes
           echo "✅ Successfully connected to Kubernetes cluster"
 
@@ -223,12 +260,11 @@ jobs:
           helm repo update
 
       - name: Deploy PostgreSQL chart
-        env:
-          KUBECONFIG: ${{ github.workspace }}/.kube/config
         run: |
+          export KUBECONFIG=$HOME/.kube/config
+
           echo "Deploying PostgreSQL..."
           helm upgrade --install ms-payments-postgresql bitnami/postgresql \
-            --kubeconfig ${{ github.workspace }}/.kube/config \
             --namespace default \
             --create-namespace \
             --set auth.postgresPassword=${{ secrets.DB_PASSWORD }} \
@@ -239,9 +275,9 @@ jobs:
           echo "✅ PostgreSQL deployed successfully"
 
       - name: Create Kubernetes Secret for app
-        env:
-          KUBECONFIG: ${{ github.workspace }}/.kube/config
         run: |
+          export KUBECONFIG=$HOME/.kube/config
+
           echo "Creating application secrets..."
           kubectl create namespace default 2>/dev/null || true
           kubectl create secret generic ms-payments-secret \
@@ -272,32 +308,37 @@ jobs:
           # Create .kube directory
           mkdir -p $HOME/.kube
 
-          # Decode and save kubeconfig
-          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          # Debug: Check if secret exists
+          if [ -z "${{ secrets.KUBECONFIG }}" ]; then
+            echo "ERROR: KUBECONFIG secret is not set or is empty"
+            exit 1
+          fi
+
+          # Try to decode kubeconfig
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config 2>/tmp/decode_error.log
+
+          # Check if decode was successful
+          if [ $? -ne 0 ]; then
+            echo "ERROR: Failed to decode base64"
+            cat /tmp/decode_error.log
+            exit 1
+          fi
 
           # Set permissions
           chmod 600 $HOME/.kube/config
 
           # Verify file exists and has content
           if [ ! -s $HOME/.kube/config ]; then
-            echo "ERROR: Kubeconfig file is empty or doesn't exist"
+            echo "ERROR: Kubeconfig file is empty after decoding"
             exit 1
           fi
 
-          echo "✓ Kubeconfig file created successfully"
-          echo "File size: $(stat -f%z $HOME/.kube/config 2>/dev/null || stat -c%s $HOME/.kube/config) bytes"
-
-          # Show cluster info (without sensitive data)
-          echo "Cluster server:"
-          grep "server:" $HOME/.kube/config | head -1
+          FILE_SIZE=$(stat -c%s $HOME/.kube/config 2>/dev/null || stat -f%z $HOME/.kube/config 2>/dev/null)
+          echo "✓ Kubeconfig file created successfully (size: $FILE_SIZE bytes)"
 
       - name: Verify Kubernetes connection
-        env:
-          KUBECONFIG: ${{ github.workspace }}/.kube/config
         run: |
-          # Copy to workspace for consistency
-          mkdir -p ${{ github.workspace }}/.kube
-          cp $HOME/.kube/config ${{ github.workspace }}/.kube/config
+          export KUBECONFIG=$HOME/.kube/config
 
           echo "Testing connection to Kubernetes cluster..."
           kubectl version --client
@@ -323,24 +364,22 @@ jobs:
           grep -A 2 "image:" ${{ env.HELM_CHART_PATH }}/values.yaml
 
       - name: Deploy with Helm (dry-run)
-        env:
-          KUBECONFIG: ${{ github.workspace }}/.kube/config
         run: |
+          export KUBECONFIG=$HOME/.kube/config
+
           echo "Running Helm dry-run..."
           helm upgrade --install ms-payments ${{ env.HELM_CHART_PATH }} \
-            --kubeconfig ${{ github.workspace }}/.kube/config \
             --namespace default \
             --values ${{ env.HELM_CHART_PATH }}/values.yaml \
             --dry-run \
             --debug
 
       - name: Deploy with Helm (apply)
-        env:
-          KUBECONFIG: ${{ github.workspace }}/.kube/config
         run: |
+          export KUBECONFIG=$HOME/.kube/config
+
           echo "Deploying application with Helm..."
           helm upgrade --install ms-payments ${{ env.HELM_CHART_PATH }} \
-            --kubeconfig ${{ github.workspace }}/.kube/config \
             --namespace default \
             --values ${{ env.HELM_CHART_PATH }}/values.yaml \
             --wait \
@@ -348,9 +387,9 @@ jobs:
           echo "✅ Helm deployment completed"
 
       - name: Verify deployment
-        env:
-          KUBECONFIG: ${{ github.workspace }}/.kube/config
         run: |
+          export KUBECONFIG=$HOME/.kube/config
+
           echo "Verifying deployment status..."
           kubectl rollout status deployment/ms-payments -n default --timeout=3m
           echo ""
@@ -366,6 +405,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Deployed Resources" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          export KUBECONFIG=${{ github.workspace }}/.kube/config
+          export KUBECONFIG=$HOME/.kube/config
           kubectl get deployment,service,pods -n default -l app=ms-payments >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
