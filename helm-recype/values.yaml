@@ -18,11 +18,11 @@ database:
   port: 5432
   name: "payments_db"
   user: "postgres"
-  password: "" # Injected from secrets
+  password: "curso2025" # Override with GitHub Secret
 
 # API Configuration
 api:
-  password: "" # Injected from secrets
+  password: "APi_PASSWD" # Override with GitHub Secret
   port: 8000
 
 resources:
@@ -63,12 +63,9 @@ hpa:
   targetCPUUtilizationPercentage: 80
 
 # Kubernetes secrets
-secrets:
+secret:
   create: true
   name: ms-payments-secrets
-  data:
-    db-password: ""
-    api-password: ""
 
 # Environment variables for the application
 env:

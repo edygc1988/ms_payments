@@ -55,11 +55,7 @@ spec:
             timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
             failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
             successThreshold: {{ .Values.probes.readiness.successThreshold }}
-          envFrom:
-{{- if .Values.secret.create }}
-            - secretRef:
-                name: {{ .Values.secret.name }}
-{{- else }}
-            - secretRef:
-                name: {{ .Values.secret.name }}
+          env:
+{{- with .Values.env }}
+{{ toYaml . | indent 12 }}
 {{- end }}
