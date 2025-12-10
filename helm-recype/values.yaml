@@ -5,14 +5,24 @@ image:
   tag: "latest"
   pullPolicy: IfNotPresent
 
-nameOverride: ""
-fullnameOverride: ""
-
 service:
   type: ClusterIP
   port: 80
 
 container:
+  port: 8000
+
+# Database Configuration (External PostgreSQL)
+database:
+  host: "postgresql.default.svc.cluster.local"
+  port: 5432
+  name: "payments_db"
+  user: "postgres"
+  password: "" # Injected from secrets
+
+# API Configuration
+api:
+  password: "" # Injected from secrets
   port: 8000
 
 resources:
@@ -52,10 +62,36 @@ hpa:
   maxReplicas: 3
   targetCPUUtilizationPercentage: 80
 
-secret:
-  create: false
-  name: ms-payments-secret
-  data: {}
+# Kubernetes secrets
+secrets:
+  create: true
+  name: ms-payments-secrets
+  data:
+    db-password: ""
+    api-password: ""
+
+# Environment variables for the application
+env:
+  - name: DB_HOST
+    value: "postgresql.default.svc.cluster.local"
+  - name: DB_PORT
+    value: "5432"
+  - name: DB_NAME
+    value: "payments_db"
+  - name: DB_USER
+    value: "postgres"
+  - name: DB_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: ms-payments-secrets
+        key: db-password
+  - name: API_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: ms-payments-secrets
+        key: api-password
+  - name: DATABASE_URL
+    value: "postgresql://postgres@postgresql.default.svc.cluster.local:5432/payments_db"
 
 deploymentName: ms-payments
 namespace: ""
