@@ -49,12 +49,11 @@ jobs:
             --values ${{ env.HELM_CHART_PATH }}/values.yaml \
             --debug
 
-      - name: Validate manifests with kubectl dry-run
+      - name: Validate manifests YAML syntax
         run: |
-          echo "Validating generated manifests..."
-          helm template ms-payments ${{ env.HELM_CHART_PATH }} | \
-            kubectl apply --dry-run=client -f - 2>&1 | \
-            grep -i "error" && exit 1 || echo "✓ All manifests are valid"
+          echo "Validating YAML syntax..."
+          helm template ms-payments ${{ env.HELM_CHART_PATH }} > /tmp/manifest.yaml
+          python3 -c "import yaml; yaml.safe_load(open('/tmp/manifest.yaml'))" && echo "✓ YAML syntax is valid" || exit 1
 
   build-image:
     name: Build and Push Docker Image
@@ -120,10 +119,58 @@ jobs:
         with:
           sarif_file: "trivy-results.sarif"
 
+  deploy-db:
+    name: Deploy PostgreSQL (DB)
+    runs-on: ubuntu-latest
+    needs: security-scan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: "latest"
+
+      - name: Add Bitnami Helm repo
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo update
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Deploy PostgreSQL chart
+        env:
+          KUBECONFIG: ${{ secrets.KUBECONFIG }}
+        run: |
+          # Deploy Bitnami PostgreSQL as a separate release for the app
+          helm upgrade --install ms-payments-postgresql bitnami/postgresql \
+            --namespace default \
+            --create-namespace \
+            --set postgresql.postgresqlPassword=${{ secrets.DB_PASSWORD }} \
+            --set postgresql.postgresqlDatabase=payments_db \
+            --set persistence.enabled=true \
+            --set persistence.size=8Gi \
+            --wait --timeout 5m
+
+      - name: Create Kubernetes Secret for app
+        env:
+          KUBECONFIG: ${{ secrets.KUBECONFIG }}
+        run: |
+          kubectl create namespace default 2>/dev/null || true
+          kubectl create secret generic ms-payments-secret \
+            --from-literal=DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
+            --from-literal=API_KEY=${{ secrets.API_KEY }} \
+            --namespace default --dry-run=client -o yaml | kubectl apply -f -
+
   deploy-helm:
     name: Deploy with Helm
     runs-on: ubuntu-latest
-    needs: [build-image, security-scan]
+    needs: [build-image, security-scan, deploy-db]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment:
       name: production

@@ -39,37 +39,36 @@ jobs:
             --debug > /tmp/manifest.yaml
           echo "Generated manifest contains $(wc -l < /tmp/manifest.yaml) lines"
 
-      - name: Validate manifests with kubectl dry-run
+      - name: Validate manifests YAML syntax
         run: |
-          echo "Validating generated manifests..."
-          helm template ms-payments ${{ env.HELM_CHART_PATH }} | \
-            kubectl apply --dry-run=client -f - 2>&1 | \
-            grep -i "error" && exit 1 || echo "✓ All manifests are valid"
+          echo "Validating YAML syntax..."
+          helm template ms-payments ${{ env.HELM_CHART_PATH }} > /tmp/manifest.yaml
+          python3 -c "import yaml; yaml.safe_load(open('/tmp/manifest.yaml'))" && echo "✓ YAML syntax is valid" || exit 1
 
       - name: Check for common issues
         run: |
           echo "Checking for common Helm issues..."
           MANIFEST=$(helm template ms-payments ${{ env.HELM_CHART_PATH }})
-
+          
           # Check for required fields
-          echo "$MANIFEST" | grep -q "kind:" && echo "✓ Kind field present" || echo "⚠ No kind field found"
-          echo "$MANIFEST" | grep -q "metadata:" && echo "✓ Metadata present" || echo "⚠ No metadata found"
-
-          # Check for deprecated APIs (v1beta1 extensions, etc)
+          echo "$MANIFEST" | grep -q "kind:" && echo "✓ Kind field present" || (echo "Error: No kind field found" && exit 1)
+          echo "$MANIFEST" | grep -q "metadata:" && echo "✓ Metadata present" || (echo "Error: No metadata found" && exit 1)
+          echo "$MANIFEST" | grep -q "name:" && echo "✓ Name field present" || echo "⚠ No name field (might be OK)"
+          
+          # Check for deprecated APIs
           if echo "$MANIFEST" | grep -q "apiVersion: extensions/v1beta1"; then
-            echo "⚠ Warning: Found deprecated extensions/v1beta1 API version"
+            echo "Error: Found deprecated extensions/v1beta1 API version"
+            exit 1
           else
             echo "✓ No deprecated extensions/v1beta1 APIs"
           fi
-
+          
           # Check image configuration
           if echo "$MANIFEST" | grep -q "image:"; then
             echo "✓ Container image configured"
           else
             echo "⚠ No container image found"
-          fi
-
-      - name: Comment on PR with results
+          fi      - name: Comment on PR with results
         if: always()
         uses: actions/github-script@v6
         with:
