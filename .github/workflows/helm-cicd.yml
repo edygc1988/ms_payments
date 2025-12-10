@@ -56,26 +56,26 @@ jobs:
           # Ensure PyYAML is available
           python3 -m pip install --user pyyaml >/dev/null
           python3 - <<'PY'
-import sys, yaml
-path = '/tmp/manifest.yaml'
-try:
-    docs = list(yaml.safe_load_all(open(path)))
-except Exception as e:
-    print('ERROR: YAML parse error in generated manifest:', file=sys.stderr)
-    print(e, file=sys.stderr)
-    print('\n--- manifest excerpt ---', file=sys.stderr)
-    with open(path) as f:
-        for i, line in enumerate(f):
-            if i < 200:
-                sys.stderr.write(line)
-            else:
-                break
-    sys.exit(1)
-if not docs:
-    print('ERROR: No YAML documents generated', file=sys.stderr)
-    sys.exit(1)
-print(f"✓ YAML parsed OK: {len(docs)} documents")
-PY
+          import sys, yaml
+          path = '/tmp/manifest.yaml'
+          try:
+              docs = list(yaml.safe_load_all(open(path)))
+          except Exception as e:
+              print('ERROR: YAML parse error in generated manifest:', file=sys.stderr)
+              print(e, file=sys.stderr)
+              print('\n--- manifest excerpt ---', file=sys.stderr)
+              with open(path) as f:
+                  for i, line in enumerate(f):
+                      if i < 200:
+                          sys.stderr.write(line)
+                      else:
+                          break
+              sys.exit(1)
+          if not docs:
+              print('ERROR: No YAML documents generated', file=sys.stderr)
+              sys.exit(1)
+          print(f"✓ YAML parsed OK: {len(docs)} documents")
+          PY
 
   build-image:
     name: Build and Push Docker Image
@@ -165,23 +165,25 @@ PY
         with:
           version: "latest"
 
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
       - name: Deploy PostgreSQL chart
-        env:
-          KUBECONFIG: ${{ secrets.KUBECONFIG }}
         run: |
           # Deploy Bitnami PostgreSQL as a separate release for the app
           helm upgrade --install ms-payments-postgresql bitnami/postgresql \
             --namespace default \
             --create-namespace \
-            --set postgresql.postgresqlPassword=${{ secrets.DB_PASSWORD }} \
-            --set postgresql.postgresqlDatabase=payments_db \
-            --set persistence.enabled=true \
-            --set persistence.size=8Gi \
+            --set auth.postgresPassword=${{ secrets.DB_PASSWORD }} \
+            --set auth.database=payments_db \
+            --set primary.persistence.enabled=true \
+            --set primary.persistence.size=8Gi \
             --wait --timeout 5m
 
       - name: Create Kubernetes Secret for app
-        env:
-          KUBECONFIG: ${{ secrets.KUBECONFIG }}
         run: |
           kubectl create namespace default 2>/dev/null || true
           kubectl create secret generic ms-payments-secret \
@@ -210,10 +212,18 @@ PY
           helm repo add bitnami https://charts.bitnami.com/bitnami
           helm repo update
 
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
       - name: Update Helm chart values with new image tag
         run: |
-          sed -i "s|image.tag: \".*\"|image.tag: \"${{ needs.build-image.outputs.image-tag }}\" |" ${{ env.HELM_CHART_PATH }}/values.yaml
-          cat ${{ env.HELM_CHART_PATH }}/values.yaml | grep "image.tag"
+          IMAGE_TAG=$(echo "${{ needs.build-image.outputs.image-tag }}" | cut -d':' -f2)
+          sed -i "s|tag: \".*\"|tag: \"${IMAGE_TAG}\"|" ${{ env.HELM_CHART_PATH }}/values.yaml
+          echo "Updated values.yaml with tag: ${IMAGE_TAG}"
+          grep -A 2 "image:" ${{ env.HELM_CHART_PATH }}/values.yaml
 
       - name: Deploy with Helm (dry-run)
         run: |
@@ -230,16 +240,14 @@ PY
             --values ${{ env.HELM_CHART_PATH }}/values.yaml \
             --wait \
             --timeout 5m
-        env:
-          KUBECONFIG: ${{ secrets.KUBECONFIG }}
 
       - name: Verify deployment
         run: |
           kubectl rollout status deployment/ms-payments -n default --timeout=3m
           kubectl get deployment,service,pods -n default
-        env:
-          KUBECONFIG: ${{ secrets.KUBECONFIG }}
 
       - name: Create deployment annotation
         run: |
-          echo "Deployment successful: ${{ needs.build-image.outputs.image-tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Deployment successful: ${{ needs.build-image.outputs.image-tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "📦 Image: ${{ needs.build-image.outputs.image-tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "🕐 Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
