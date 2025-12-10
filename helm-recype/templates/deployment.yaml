@@ -1,4 +1,4 @@
-{{- $full := include "helm-recyoe.fullname" . -}}
+{{- $full := include "helm-recype.fullname" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

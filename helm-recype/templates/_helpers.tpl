@@ -1,4 +1,4 @@
-{{- define "helm-recyoe.fullname" -}}
+{{- define "helm-recype.fullname" -}}
 {{- $name := default .Chart.Name .Values.nameOverride -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride }}

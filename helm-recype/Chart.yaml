@@ -1,5 +1,5 @@
 apiVersion: v2
-name: helm-recyoe
+name: helm-recype
 description: Helm chart for ms-payments deployment (converted from openshift manifests)
 type: application
 version: 0.1.0
