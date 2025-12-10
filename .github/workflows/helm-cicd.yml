@@ -49,33 +49,33 @@ jobs:
             --values ${{ env.HELM_CHART_PATH }}/values.yaml \
             --debug
 
-        - name: Validate manifests YAML syntax
+      - name: Validate manifests YAML syntax
         run: |
           echo "Validating YAML syntax..."
           helm template ms-payments ${{ env.HELM_CHART_PATH }} > /tmp/manifest.yaml
           # Ensure PyYAML is available
           python3 -m pip install --user pyyaml >/dev/null
           python3 - <<'PY'
-    import sys, yaml
-    path = '/tmp/manifest.yaml'
-    try:
-      docs = list(yaml.safe_load_all(open(path)))
-    except Exception as e:
-      print('ERROR: YAML parse error in generated manifest:', file=sys.stderr)
-      print(e, file=sys.stderr)
-      print('\n--- manifest excerpt ---', file=sys.stderr)
-      with open(path) as f:
+import sys, yaml
+path = '/tmp/manifest.yaml'
+try:
+    docs = list(yaml.safe_load_all(open(path)))
+except Exception as e:
+    print('ERROR: YAML parse error in generated manifest:', file=sys.stderr)
+    print(e, file=sys.stderr)
+    print('\n--- manifest excerpt ---', file=sys.stderr)
+    with open(path) as f:
         for i, line in enumerate(f):
-          if i < 200:
-            sys.stderr.write(line)
-          else:
-            break
-      sys.exit(1)
-    if not docs:
-      print('ERROR: No YAML documents generated', file=sys.stderr)
-      sys.exit(1)
-    print(f"✓ YAML parsed OK: {len(docs)} documents")
-    PY
+            if i < 200:
+                sys.stderr.write(line)
+            else:
+                break
+    sys.exit(1)
+if not docs:
+    print('ERROR: No YAML documents generated', file=sys.stderr)
+    sys.exit(1)
+print(f"✓ YAML parsed OK: {len(docs)} documents")
+PY
 
   build-image:
     name: Build and Push Docker Image
