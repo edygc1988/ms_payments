@@ -14,11 +14,11 @@ container:
 
 # Database Configuration (External PostgreSQL)
 database:
-  host: "postgresql.default.svc.cluster.local"
+  host: "mi-postgres-primary.default.svc.cluster.local"
   port: 5432
-  name: "payments_db"
-  user: "postgres"
-  password: "curso2025" # Override with GitHub Secret
+  name: "miapp"
+  user: "miapp_user"
+  password: "MiPasswordApp123" # Override with GitHub Secret
 
 # API Configuration
 api:

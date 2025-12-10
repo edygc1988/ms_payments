@@ -1,0 +1,50 @@
+## PostgreSQL Bitnami Chart Configuration
+## Para desplegar: helm upgrade --install mi-postgres oci://registry-1.docker.io/bitnamicharts/postgresql --values ./postgresql-values.yaml
+
+auth:
+  postgresPassword: "MiPasswordSeguro123"
+  database: "miapp"
+  username: "miapp_user"
+  password: "MiPasswordApp123"
+  replicationPassword: "MiPasswordReplicacion123"
+
+primary:
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClassName: "standard"
+  resources:
+    limits:
+      memory: 512Mi
+      cpu: 500m
+    requests:
+      memory: 256Mi
+      cpu: 250m
+
+readReplicas:
+  replicaCount: 2
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClassName: "standard"
+  resources:
+    limits:
+      memory: 256Mi
+      cpu: 250m
+    requests:
+      memory: 256Mi
+      cpu: 250m
+
+# Service configuration
+service:
+  type: ClusterIP
+  ports:
+    postgresql: 5432
+
+# Metrics (opcional)
+metrics:
+  enabled: false
+
+# Backup (opcional)
+backup:
+  enabled: false
