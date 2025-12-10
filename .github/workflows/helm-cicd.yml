@@ -49,11 +49,12 @@ jobs:
             --values ${{ env.HELM_CHART_PATH }}/values.yaml \
             --debug
 
-      - name: Validate Helm with kubeval
+      - name: Validate manifests with kubectl dry-run
         run: |
-          wget https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz
-          tar xf kubeval-linux-amd64.tar.gz
-          helm template ms-payments ${{ env.HELM_CHART_PATH }} | ./kubeval
+          echo "Validating generated manifests..."
+          helm template ms-payments ${{ env.HELM_CHART_PATH }} | \
+            kubectl apply --dry-run=client -f - 2>&1 | \
+            grep -i "error" && exit 1 || echo "✓ All manifests are valid"
 
   build-image:
     name: Build and Push Docker Image

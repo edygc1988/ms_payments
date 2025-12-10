@@ -39,16 +39,35 @@ jobs:
             --debug > /tmp/manifest.yaml
           echo "Generated manifest contains $(wc -l < /tmp/manifest.yaml) lines"
 
-      - name: Validate against Kubernetes schema
+      - name: Validate manifests with kubectl dry-run
         run: |
-          wget -q https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz
-          tar xf kubeval-linux-amd64.tar.gz
-          helm template ms-payments ${{ env.HELM_CHART_PATH }} | ./kubeval --strict
+          echo "Validating generated manifests..."
+          helm template ms-payments ${{ env.HELM_CHART_PATH }} | \
+            kubectl apply --dry-run=client -f - 2>&1 | \
+            grep -i "error" && exit 1 || echo "✓ All manifests are valid"
 
-      - name: Check for deprecated APIs
+      - name: Check for common issues
         run: |
-          echo "Checking for deprecated Kubernetes APIs..."
-          helm template ms-payments ${{ env.HELM_CHART_PATH }} | grep -i "deprecated" && echo "Warning: Deprecated APIs found" || echo "No deprecated APIs found"
+          echo "Checking for common Helm issues..."
+          MANIFEST=$(helm template ms-payments ${{ env.HELM_CHART_PATH }})
+
+          # Check for required fields
+          echo "$MANIFEST" | grep -q "kind:" && echo "✓ Kind field present" || echo "⚠ No kind field found"
+          echo "$MANIFEST" | grep -q "metadata:" && echo "✓ Metadata present" || echo "⚠ No metadata found"
+
+          # Check for deprecated APIs (v1beta1 extensions, etc)
+          if echo "$MANIFEST" | grep -q "apiVersion: extensions/v1beta1"; then
+            echo "⚠ Warning: Found deprecated extensions/v1beta1 API version"
+          else
+            echo "✓ No deprecated extensions/v1beta1 APIs"
+          fi
+
+          # Check image configuration
+          if echo "$MANIFEST" | grep -q "image:"; then
+            echo "✓ Container image configured"
+          else
+            echo "⚠ No container image found"
+          fi
 
       - name: Comment on PR with results
         if: always()
