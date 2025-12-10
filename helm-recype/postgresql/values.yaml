@@ -22,9 +22,10 @@ persistence:
 resources: {}
 
 secret:
-  create: false
+  create: true
   name: postgresql-secret
-  data: {}
+  data:
+    DB_PASSWORD: "Y3Vyc28yMDI1LA=="
 
 initdbScripts:
   enabled: false

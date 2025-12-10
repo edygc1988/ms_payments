@@ -1,0 +1,175 @@
+name: Helm CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "main.py"
+      - "Dockerfile"
+      - "requirements.txt"
+      - "helm-recype/**"
+      - ".github/workflows/helm-cicd.yml"
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "main.py"
+      - "Dockerfile"
+      - "requirements.txt"
+      - "helm-recype/**"
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: ${{ github.repository_owner }}/ms_payments
+  HELM_CHART_PATH: ./helm-recype
+
+jobs:
+  validate-helm:
+    name: Validate Helm Chart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: "latest"
+
+      - name: Helm lint
+        run: |
+          helm lint ${{ env.HELM_CHART_PATH }}
+
+      - name: Helm template
+        run: |
+          helm template ms-payments ${{ env.HELM_CHART_PATH }} \
+            --values ${{ env.HELM_CHART_PATH }}/values.yaml \
+            --debug
+
+      - name: Validate Helm with kubeval
+        run: |
+          wget https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz
+          tar xf kubeval-linux-amd64.tar.gz
+          helm template ms-payments ${{ env.HELM_CHART_PATH }} | ./kubeval
+
+  build-image:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: validate-helm
+    if: github.event_name == 'push'
+    outputs:
+      image-tag: ${{ steps.image-tag.outputs.tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Generate image tag
+        id: image-tag
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            TAG="${{ env.IMAGE_NAME }}:latest"
+          else
+            TAG="${{ env.IMAGE_NAME }}:${{ github.ref_name }}-${{ github.sha }}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Generated tag: $TAG"
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.image-tag.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    needs: build-image
+    if: github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ needs.build-image.outputs.image-tag }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH"
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+  deploy-helm:
+    name: Deploy with Helm
+    runs-on: ubuntu-latest
+    needs: [build-image, security-scan]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: "latest"
+
+      - name: Add Helm repositories
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo update
+
+      - name: Update Helm chart values with new image tag
+        run: |
+          sed -i "s|image.tag: \".*\"|image.tag: \"${{ needs.build-image.outputs.image-tag }}\" |" ${{ env.HELM_CHART_PATH }}/values.yaml
+          cat ${{ env.HELM_CHART_PATH }}/values.yaml | grep "image.tag"
+
+      - name: Deploy with Helm (dry-run)
+        run: |
+          helm upgrade --install ms-payments ${{ env.HELM_CHART_PATH }} \
+            --namespace default \
+            --values ${{ env.HELM_CHART_PATH }}/values.yaml \
+            --dry-run \
+            --debug
+
+      - name: Deploy with Helm (apply)
+        run: |
+          helm upgrade --install ms-payments ${{ env.HELM_CHART_PATH }} \
+            --namespace default \
+            --values ${{ env.HELM_CHART_PATH }}/values.yaml \
+            --wait \
+            --timeout 5m
+        env:
+          KUBECONFIG: ${{ secrets.KUBECONFIG }}
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/ms-payments -n default --timeout=3m
+          kubectl get deployment,service,pods -n default
+        env:
+          KUBECONFIG: ${{ secrets.KUBECONFIG }}
+
+      - name: Create deployment annotation
+        run: |
+          echo "Deployment successful: ${{ needs.build-image.outputs.image-tag }}" >> $GITHUB_STEP_SUMMARY
