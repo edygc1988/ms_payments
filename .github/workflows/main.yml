@@ -52,6 +52,11 @@ jobs:
           sudo mv oc /usr/local/bin/
           oc version
 
+      - name: Install Helm
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          helm version
+
       - name: Login to OpenShift
         env:
           OPENSHIFT_API_URL: ${{ secrets.OPENSHIFT_API_URL }}
@@ -83,11 +88,12 @@ jobs:
             echo "DB_PASSWORD/API_KEY not set in GitHub Secrets; skipping secret creation"
           fi
 
-          # Substitute placeholders and apply
-          sed -e "s|IMAGE_PLACEHOLDER|${IMAGE}|g" \
-              -e "s|DEPLOYMENT_NAME_PLACEHOLDER|${DEPLOYMENT_NAME}|g" \
-              -e "s|DEPLOYMENT_NAMESPACE_PLACEHOLDER|${NAMESPACE}|g" \
-              -e "s|PORT_PLACEHOLDER|${PORT}|g" openshift/deployment.yaml > /tmp/deployment-applied.yaml
-
-          oc apply -f /tmp/deployment-applied.yaml -n "$NAMESPACE"
-          oc rollout status deployment/$DEPLOYMENT_NAME -n "$NAMESPACE" --timeout=180s
+          # Deploy with Helm chart in helm-recype
+          helm upgrade --install ${DEPLOYMENT_NAME} ./helm-recype \
+            --namespace ${NAMESPACE} --create-namespace \
+            --set image.repository=${IMAGE%:*} \
+            --set image.tag=${IMAGE#*:} \
+            --set container.port=${PORT} \
+            --set deploymentName=${DEPLOYMENT_NAME} \
+            --set secret.create=false \
+            --wait --timeout 180s
